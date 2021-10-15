@@ -188,10 +188,15 @@ class ScatterLayerArtist(VispyLayerArtist):
         # changed (in the case of subsets)
 
         self._multiscat.set_data_values(self.id, x, y, z)
+        
+            
+        #import pdb; pdb.set_trace()
 
         # Mask points outside the clip limits
         if self._clip_limits is None:
             self._multiscat.set_mask(self.id, None)
+            genome_position = self.layer['genome_position'].ravel()
+
         else:
 
             xmin, xmax, ymin, ymax, zmin, zmax = self._clip_limits
@@ -212,6 +217,18 @@ class ScatterLayerArtist(VispyLayerArtist):
                 keep &= (z <= zmin) & (z >= zmax)
 
             self._multiscat.set_mask(self.id, keep)
+            genome_position = self.layer['genome_position'].ravel()[keep]
+
+
+        
+        #print(f'x = {x}')
+        #print(f'genome_position = {genome_position}')
+        #print(f'metadata = {self.layer.meta}')
+        
+        connection_mask = np.ediff1d(genome_position, to_end=999999999.) <= self.layer.meta['genome_stepsize']+100 #a little padding
+        #print(f'connection_mask = {connection_mask}')
+        self._multiscat.set_connection_mask(self.id, connection_mask)
+
 
         self.redraw()
 

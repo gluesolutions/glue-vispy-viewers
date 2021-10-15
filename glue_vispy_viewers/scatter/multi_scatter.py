@@ -57,6 +57,7 @@ class MultiColorScatter(scene.visuals.Markers):
         else:
             self.layers[label] = {'data': None,
                                   'mask': None,
+                                  'connection_mask':[True], #A mask describing which points should be connected by a line (i.e. are contiguous)
                                   'errors': None,
                                   'vectors': None,
                                   'draw_arrows': False,
@@ -68,6 +69,10 @@ class MultiColorScatter(scene.visuals.Markers):
 
     def deallocate(self, label):
         self.layers.pop(label)
+        self._update()
+
+    def set_connection_mask(self, label, connection_mask):
+        self.layers[label]['connection_mask'] = connection_mask
         self._update()
 
     def set_data_values(self, label, x, y, z):
@@ -134,10 +139,11 @@ class MultiColorScatter(scene.visuals.Markers):
         line_colors = []
         arrows = []
         arrow_colors = []
+        #clipped_connections = []
         connections = []
 
         for label in sorted(self.layers, key=lambda x: self.layers[x]['zorder']()):
-            print(label)
+            #print(label)
             layer = self.layers[label]
 
             if not layer['visible'] or layer['data'] is None:
@@ -155,13 +161,15 @@ class MultiColorScatter(scene.visuals.Markers):
 
                 if layer['mask'] is None:
                     data.append(layer['data'])
-                    connections.extend([True]*(len(layer['data'])-1))
-                    connections.extend([False])
+                    #clipped_connections.extend([True]*(len(layer['data'])-1))
+                    #clipped_connections.extend([False])
                 else:
                     data.append(layer['data'][layer['mask'], :])
-                    print(layer['mask'])
-                    connections.extend(get_connection_mask(layer['mask']))
+                    #print(layer['mask'])
+                    #clipped_connections.extend(get_connection_mask(layer['mask']))
                 # Colors
+                connections.extend(layer['connection_mask'])
+
 
                 if layer['color'].ndim == 1:
                     rgba = np.hstack([layer['color'], 1])
@@ -223,10 +231,13 @@ class MultiColorScatter(scene.visuals.Markers):
         #print(colors)
         #print(connections)
         #connections = [True, False, True, True, False, True, True, True, True, True, True, False]
-        
+        connections = np.array(connections)
         self.set_data(data, edge_color=colors, face_color=colors, size=sizes)
 
-        self._connecting_line_widget.set_data(pos=data, color=colors, connect=np.array(connections))
+        #connections = np.array(clipped_connections) & np.array(layer['connection_mask']) #Only connect points that are not clipped and are contiguous
+        #print(connections.shape)
+        #print(data.shape)
+        self._connecting_line_widget.set_data(pos=data, color=colors, connect=connections)
         
         if len(lines) == 0:
             if self._error_vector_widget is not None:
