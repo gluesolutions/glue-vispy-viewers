@@ -3,10 +3,31 @@ from contextlib import contextmanager
 import numpy as np
 
 from matplotlib.colors import ColorConverter
+from itertools import groupby
 
 from vispy import scene
-from vispy.scene.visuals import Arrow
+from vispy.scene.visuals import Arrow, Line#, LinePlot
+# from vispy.visuals.line.line import LineVisual #A LineVisual cannot be placed inside a scenegraph with parent the same way
 
+
+def get_connection_mask(a):
+    """
+    Given a subset mask, return the appropriate
+    vispy.Line connection array for the subset.
+    Only the points in the subset are plotted, so 
+    return an array where each group of connected
+    points in the array is terminated by a FALSE
+    """
+    new_mask = []
+    for k,g in groupby(a):
+        if k:
+            for i in g:
+                new_mask.extend([i])
+            new_mask[-1] = False #Last item in a connected group set to False
+        else:
+            pass
+    return new_mask
+    
 
 class MultiColorScatter(scene.visuals.Markers):
     """
@@ -20,7 +41,9 @@ class MultiColorScatter(scene.visuals.Markers):
         self._combined_data = None
         self._skip_update = False
         self._error_vector_widget = None
+        self._connecting_line_widget = None
         super(MultiColorScatter, self).__init__(*args, **kwargs)
+        self._connecting_line_widget = Line(parent=self, connect='strip', width=3)
 
     @contextmanager
     def delay_update(self):
@@ -111,9 +134,10 @@ class MultiColorScatter(scene.visuals.Markers):
         line_colors = []
         arrows = []
         arrow_colors = []
+        connections = []
 
         for label in sorted(self.layers, key=lambda x: self.layers[x]['zorder']()):
-
+            print(label)
             layer = self.layers[label]
 
             if not layer['visible'] or layer['data'] is None:
@@ -131,9 +155,12 @@ class MultiColorScatter(scene.visuals.Markers):
 
                 if layer['mask'] is None:
                     data.append(layer['data'])
+                    connections.extend([True]*(len(layer['data'])-1))
+                    connections.extend([False])
                 else:
                     data.append(layer['data'][layer['mask'], :])
-
+                    print(layer['mask'])
+                    connections.extend(get_connection_mask(layer['mask']))
                 # Colors
 
                 if layer['color'].ndim == 1:
@@ -148,7 +175,7 @@ class MultiColorScatter(scene.visuals.Markers):
                 rgba[:, 3] *= layer['alpha']
 
                 colors.append(rgba)
-
+                
                 # Sizes
 
                 if np.isscalar(layer['size']):
@@ -181,7 +208,7 @@ class MultiColorScatter(scene.visuals.Markers):
                     if layer['draw_arrows']:
                         arrows.append(out)
                         arrow_colors.append(rgba)
-
+            
         if len(data) == 0:
             self.visible = False
             return
@@ -191,9 +218,16 @@ class MultiColorScatter(scene.visuals.Markers):
         data = np.vstack(data)
         colors = np.vstack(colors)
         sizes = np.hstack(sizes)
-
+        #connections = np.vstack(connections)
+        #connections[-1] = False #So we do not loop
+        #print(colors)
+        #print(connections)
+        #connections = [True, False, True, True, False, True, True, True, True, True, True, False]
+        
         self.set_data(data, edge_color=colors, face_color=colors, size=sizes)
 
+        self._connecting_line_widget.set_data(pos=data, color=colors, connect=np.array(connections))
+        
         if len(lines) == 0:
             if self._error_vector_widget is not None:
                 self._error_vector_widget.visible = False
@@ -232,27 +266,43 @@ if __name__ == "__main__":  # pragma: nocover
     canvas = scene.SceneCanvas(keys='interactive')
     view = canvas.central_widget.add_view()
     view.camera = scene.TurntableCamera(up='z', fov=60)
+    
+    data_len = 7
 
-    x = np.random.random(20)
-    y = np.random.random(20)
-    z = np.random.random(20)
-
+    #x = np.random.random(data_len)
+    #y = np.random.random(data_len)
+    #z = np.random.random(data_len)
+    
+    x = np.array([.5,.5,1,0.9,0.5,0.5,0.6])
+    y = np.array([0.1,0.9,0.7,0.5,0.4,0.6,0.2])
+    z = np.array([0.1,0,0.3,0.4,0.1,0.9,0.8])
+    
     multi_scat = MultiColorScatter(parent=view.scene)
     multi_scat.allocate('data')
-    multi_scat.set_zorder('data', lambda: 0)
+    multi_scat.set_color('data', 'red')
+    multi_scat.set_zorder('data', lambda: 3)
+    #multi_scat.set_alpha('data', 1)
+
     multi_scat.set_data_values('data', x, y, z)
 
+    mask = np.array([True,True,False,False,True,True,True])
+    #print(mask)
+    #mask = np.random.random(data_len) > 0.5
+    #print(mask)
     multi_scat.allocate('subset1')
-    multi_scat.set_mask('subset1', np.random.random(20) > 0.5)
-    multi_scat.set_color('subset1', 'red')
-    multi_scat.set_zorder('subset1', lambda: 1)
+    multi_scat.set_data_values('subset1', x, y, z)
+    multi_scat.set_mask('subset1', mask)
+    multi_scat.set_zorder('subset1', lambda: 0)
+    multi_scat.set_color('subset1', 'coral')
+    #multi_scat.set_alpha('subset1', 1)
+    #multi_scat.set_size('subset1', 4)
 
-    multi_scat.allocate('subset2')
-    multi_scat.set_mask('subset2', np.random.random(20) > 0.5)
-    multi_scat.set_color('subset2', 'green')
-    multi_scat.set_zorder('subset2', lambda: 2)
-    multi_scat.set_alpha('subset2', 0.5)
-    multi_scat.set_size('subset2', 20)
+    #multi_scat.allocate('subset2')
+    #multi_scat.set_mask('subset2', np.random.random(20) > 0.5)
+    #multi_scat.set_color('subset2', 'green')
+    #multi_scat.set_zorder('subset2', lambda: 2)
+    #multi_scat.set_alpha('subset2', 0.5)
+    #multi_scat.set_size('subset2', 20)
 
     axis = scene.visuals.XYZAxis(parent=view.scene)
 
