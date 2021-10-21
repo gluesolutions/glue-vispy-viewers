@@ -12,7 +12,7 @@ from glue.viewers.common.tool import CheckableTool
 from glue.core.command import ApplySubsetState
 
 from glue.core.roi import RectangularROI, CircularROI, PolygonalROI, Projected3dROI
-from glue.core.subset import RoiSubsetState3d
+from glue.core.subset import RoiSubsetState3d, RoiSubsetState3dGenome
 
 from ..utils import as_matrix_transform
 from vispy.scene import Rectangle, Line, Ellipse
@@ -51,7 +51,28 @@ class VispyMouseMode(CheckableTool):
         x_att = self.viewer.state.x_att
         y_att = self.viewer.state.y_att
         z_att = self.viewer.state.z_att
-        self.apply_subset_state(RoiSubsetState3d(x_att, y_att, z_att, roi))
+        layer_artist = next(self.iter_data_layer_artists())
+        data = layer_artist.layer
+        #print(data)
+        try:
+            genome_stepsize = data.meta['genome_stepsize']/2
+        except KeyError:
+            genome_stepsize = 0
+        #print(genome_stepsize)
+        #We use this subset...
+        subset = RoiSubsetState3d(x_att, y_att, z_att, roi)
+        #to calculate the mask on the reference dataset...
+        mask = subset.to_mask(data)
+        #And then we apply it back to our reference dataset to calculate the genome_ranges we desire
+        #TODO: apply this better approach to ElementSubsetState as well
+        genome_ranges = []
+        try:
+            for chr,genome_position in zip(data['chr'][mask],data['genome_position'][mask]):
+                genome_ranges.append((chr,genome_position-genome_stepsize,genome_position+genome_stepsize))
+        except:
+            pass
+        #This produces many little subsets centered around each point
+        self.apply_subset_state(RoiSubsetState3dGenome(x_att, y_att, z_att, roi, genome_ranges))
 
     def apply_subset_state(self, subset_state):
         cmd = ApplySubsetState(data_collection=self.viewer._data,
