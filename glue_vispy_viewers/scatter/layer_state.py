@@ -17,7 +17,7 @@ class ScatterLayerState(VispyLayerState):
     size_attribute = SelectionCallbackProperty()
     size_vmin = CallbackProperty()
     size_vmax = CallbackProperty()
-    size_scaling = CallbackProperty(1)
+    size_scaling = CallbackProperty(0.33)
 
     color_mode = CallbackProperty('Fixed')
     cmap_attribute = SelectionCallbackProperty()
